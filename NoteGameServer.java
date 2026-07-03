@@ -61,7 +61,7 @@ public class NoteGameServer {
         // ターン側に小節と音階を送信、相手には WAIT
         String[] measureNotes = SONG.get(measureIndex[currentPlayer-1]);
         StringBuilder sb = new StringBuilder();
-        sb.append("MEASURE ").append(measureIndex)[currentPlayer-1];
+        sb.append("MEASURE ").append(measureIndex[currentPlayer-1]);
         for (String note : measureNotes) {
           sb.append(" ").append(note);
         }
