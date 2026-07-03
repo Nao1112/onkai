@@ -50,7 +50,7 @@ public class NoteGameServer {
 
       System.out.println("先攻プレイヤー: " + firstPlayer);
 
-      int measureIndex = 0;
+      int[] measureIndex = {0,0};
       boolean finished = false;
       int winner = 0;
 
@@ -59,9 +59,9 @@ public class NoteGameServer {
         PlayerConnection waiting = (currentPlayer == 1) ? player2 : player1;
 
         // ターン側に小節と音階を送信、相手には WAIT
-        String[] measureNotes = SONG.get(measureIndex);
+        String[] measureNotes = SONG.get(measureIndex[currentPlayer-1]);
         StringBuilder sb = new StringBuilder();
-        sb.append("MEASURE ").append(measureIndex);
+        sb.append("MEASURE ").append(measureIndex)[currentPlayer-1];
         for (String note : measureNotes) {
           sb.append(" ").append(note);
         }
@@ -98,18 +98,18 @@ public class NoteGameServer {
 
         if (correct) {
           // 最終小節なら勝利
-          if (measureIndex == SONG.size() - 1) {
+          if (measureIndex[currentPlayer-1] == SONG.size() - 1) {
             finished = true;
             winner = currentPlayer;
             break;
-          } else {
-            // 正解なら同じプレイヤーで次の小節へ
-            measureIndex++;
           }
+          active.sendLine("RESULT 1 " + matchCount);
+          
         } else {
-          // 不正解ならターン交代
-          currentPlayer = (currentPlayer == 1) ? 2 : 1;
+          active.sendLine("RESULT 0 " + matchCount);
         }
+         // 正解・不正解に関係なくターン交代
+                currentPlayer = (currentPlayer == 1) ? 2 : 1;
       }
 
       if (winner != 0) {
