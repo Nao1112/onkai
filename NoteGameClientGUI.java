@@ -366,6 +366,14 @@ public class NoteGameClientGUI extends Application {
 
                         final String note = whiteNotes[i];
 
+                        whiteKey.setOnMousePressed(e -> {
+                                whiteKey.setFill(Color.LIGHTGRAY);
+                        });
+
+                        whiteKey.setOnMouseReleased(e -> {
+                                whiteKey.setFill(Color.WHITE);
+                        });
+
                         whiteKey.setOnMouseClicked(e -> {
 
                                 if (answerNotes.size() < noteLabels.size()) {
