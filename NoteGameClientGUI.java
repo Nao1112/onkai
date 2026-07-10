@@ -6,7 +6,10 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
 import javax.sound.midi.*;
@@ -57,6 +60,8 @@ public class NoteGameClientGUI extends Application {
                 HBox noteButtons = new HBox(10);
                 noteButtons.setAlignment(Pos.CENTER);
 
+                Pane pianoPane = createPiano();
+
                 for (String note : NOTES) {
                         Button btn = new Button(note);
                         btn.setPrefWidth(60);
@@ -96,11 +101,11 @@ public class NoteGameClientGUI extends Application {
                 historyBtn.setPrefWidth(120);
                 historyBtn.setOnAction(e -> stage.setScene(historyScene));
 
-                Button playBtn = new Button("曲を聴く");
+                Button playBtn = new Button("曲を聴く(1回のみ)");
                 playBtn.setPrefWidth(120);
                 playBtn.setOnAction(e -> playMidi());
 
-                VBox mainRoot = new VBox(20, statusLabel, answerBox, noteButtons, deleteBtn, sendBtn, playBtn,
+                VBox mainRoot = new VBox(20, statusLabel, answerBox, pianoPane, deleteBtn, sendBtn, playBtn,
                                 historyBtn);
                 mainRoot.setPadding(new Insets(20));
                 mainRoot.setAlignment(Pos.CENTER);
@@ -130,7 +135,7 @@ public class NoteGameClientGUI extends Application {
         private void playMidi() {
 
                 if (!canPlayMusic) {
-                        statusLabel.setText("今はあなたのターンではありません");
+                        statusLabel.setText("自分のターンに1度のみ再生可能");
                         return;
                 }
 
@@ -196,11 +201,11 @@ public class NoteGameClientGUI extends Application {
                                 break;
 
                         case "MEASURE":
-                                int idx = Integer.parseInt(parts[1]);
+                                int idx = Integer.parseInt(parts[1]) + 1;
 
                                 Platform.runLater(() -> {
                                         statusLabel.setText("あなたのターン：" + idx + "段階");
-                                        
+
                                         canPlayMusic = true;
 
                                         answerBox.getChildren().clear();
@@ -338,6 +343,84 @@ public class NoteGameClientGUI extends Application {
 
                 out.println("ANSWER " + sb.toString());
                 System.out.println("[送信] ANSWER " + sb.toString());
+        }
+
+        private Pane createPiano() {
+
+                Pane pane = new Pane();
+
+                double keyWidth = 50;
+                double keyHeight = 150;
+
+                String[] whiteNotes = {
+                                "ド", "レ", "ミ", "ファ", "ソ", "ラ", "シ", "ド"
+                };
+
+                // 白鍵
+                for (int i = 0; i < whiteNotes.length; i++) {
+
+                        Rectangle whiteKey = new Rectangle(keyWidth, keyHeight);
+                        whiteKey.setFill(Color.WHITE);
+                        whiteKey.setStroke(Color.BLACK);
+                        whiteKey.setX(i * keyWidth);
+
+                        final String note = whiteNotes[i];
+
+                        whiteKey.setOnMouseClicked(e -> {
+
+                                if (answerNotes.size() < noteLabels.size()) {
+                                        answerNotes.add(note);
+                                        noteLabels.get(answerNotes.size() - 1).setText(note);
+                                }
+
+                        });
+
+                        pane.getChildren().add(whiteKey);
+
+                        // 鍵盤名
+                        Label label = new Label(note);
+                        label.setLayoutX(i * keyWidth + 22);
+                        label.setLayoutY(150);
+
+                        pane.getChildren().add(label);
+                }
+
+                // 黒鍵の位置（ミ・シの後は黒鍵なし）
+                int[] blackPos = { 0, 1, 3, 4, 5, 7 };
+
+                for (int pos : blackPos) {
+
+                        double width = keyWidth * 0.5;
+
+                        // 一番右(7)だけ幅を半分にする
+                        if (pos == 7) {
+                                width = keyWidth * 0.3;
+                        }
+
+                        Rectangle blackKey = new Rectangle(
+                                        width,
+                                        keyHeight * 0.6);
+
+                        blackKey.setFill(Color.BLACK);
+                        blackKey.setStroke(Color.BLACK);
+
+                        blackKey.setX((pos + 1) * keyWidth - width / 2);
+                        blackKey.setY(0);
+
+                        if (pos == 7) {
+                                blackKey.setX((pos + 0.85) * keyWidth - width / 2);;
+                        }
+
+                        // 押しても何もしない
+                        blackKey.setOnMouseClicked(e -> {
+                        });
+
+                        pane.getChildren().add(blackKey);
+                }
+
+                pane.setPrefSize(480, 180);
+
+                return pane;
         }
 
         public static void main(String[] args) {
