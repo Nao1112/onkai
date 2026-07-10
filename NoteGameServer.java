@@ -1,7 +1,8 @@
-import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
@@ -56,6 +57,10 @@ public class NoteGameServer {
                         // ゲーム開始を通知
                         player1.sendLine("START");
                         player2.sendLine("START");
+
+                        // midiファイルを送る
+                        player1.sendMidi("kirakira1.mid");
+                        player2.sendMidi("kirakira1.mid");
 
                         System.out.println("先攻プレイヤー: "
                                         + firstPlayer);
@@ -241,6 +246,8 @@ public class NoteGameServer {
                                                 "WINNER " + winner);
                         }
 
+                        player1.sendLine("GAMEEND");
+                        player2.sendLine("GAMEEND");
                         // 通信終了
                         player1.close();
                         player2.close();
@@ -350,9 +357,8 @@ public class NoteGameServer {
 
                 private final Socket socket;
 
-                private final BufferedReader in;
-
-                private final PrintWriter out;
+                private final DataInputStream in;
+                private final DataOutputStream out;
 
                 // 通信準備
                 PlayerConnection(Socket socket)
@@ -361,28 +367,53 @@ public class NoteGameServer {
                         this.socket = socket;
 
                         // 受信用
-                        this.in = new BufferedReader(
-                                        new InputStreamReader(
-                                                        socket.getInputStream(),
-                                                        "UTF-8"));
-
-                        // 送信用
-                        this.out = new PrintWriter(
-                                        socket.getOutputStream(),
-                                        true);
+                        this.in = new DataInputStream(socket.getInputStream());
+                        this.out = new DataOutputStream(socket.getOutputStream());
                 }
 
                 // メッセージ送信
                 void sendLine(String line) {
 
-                        out.println(line);
+                        try {
+                                out.writeUTF(line);
+                                out.flush();
+                        } catch (IOException e) {
+                                e.printStackTrace();
+                        }
+
                 }
 
                 // メッセージ受信
-                String readLine()
-                                throws IOException {
+                String readLine() throws IOException {
 
-                        return in.readLine();
+                        return in.readUTF();
+
+                }
+
+                void sendMidi(String filename) throws IOException {
+
+                        File file = new File(filename);
+
+                        sendLine("MIDI");
+
+                        out.writeLong(file.length());
+
+                        FileInputStream fis = new FileInputStream(file);
+
+                        byte[] buffer = new byte[4096];
+
+                        int len;
+
+                        while ((len = fis.read(buffer)) != -1) {
+
+                                out.write(buffer, 0, len);
+
+                        }
+
+                        out.flush();
+
+                        fis.close();
+
                 }
 
                 // 通信終了処理
@@ -393,7 +424,10 @@ public class NoteGameServer {
                         } catch (IOException ignored) {
                         }
 
-                        out.close();
+                        try {
+                                out.close();
+                        } catch (IOException ignored) {
+                        }
 
                         try {
                                 socket.close();
