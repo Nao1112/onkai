@@ -14,10 +14,6 @@ public class NoteGameServer {
         // 例：「ド ド ソ ソ ラ ラ ソ」
         private static final List<String[]> SONG = List.of(
                         new String[] { "ド", "ド", "ソ", "ソ", "ラ", "ラ", "ソ" },
-                        new String[] { "ファ", "ファ", "ミ", "ミ", "レ", "レ", "ド" },
-                        new String[] { "ソ", "ソ", "ファ", "ファ", "ミ", "ミ", "レ" },
-                        new String[] { "ソ", "ソ", "ファ", "ファ", "ミ", "ミ", "レ" },
-                        new String[] { "ド", "ド", "ソ", "ソ", "ラ", "ラ", "ソ" },
                         new String[] { "ファ", "ファ", "ミ", "ミ", "レ", "レ", "ド" });
 
         public static void main(String[] args) {
