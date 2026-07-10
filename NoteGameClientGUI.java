@@ -24,414 +24,459 @@ import java.util.List;
 
 public class NoteGameClientGUI extends Application {
 
-        private Socket socket;
-        private BufferedReader in;
-        private PrintWriter out;
+  private Socket socket;
+  private BufferedReader in;
+  private PrintWriter out;
 
-        private Label statusLabel;
-        private HBox answerBox;
+  private Label statusLabel;
+  private HBox answerBox;
 
-        private List<Label> noteLabels = new ArrayList<>();
-        private List<String> answerNotes = new ArrayList<>();
+  private List<Label> noteLabels = new ArrayList<>();
+  private List<String> answerNotes = new ArrayList<>();
 
-        private int myRole = 0;
+  private int myRole = 0;
 
-        private List<List<String>> historyNotes = new ArrayList<>();
-        private List<List<String>> historyJudge = new ArrayList<>();
+  private List<List<String>> historyNotes = new ArrayList<>();
+  private List<List<String>> historyJudge = new ArrayList<>();
 
-        private VBox historyPageBox = new VBox(10);
+  private VBox historyPageBox = new VBox(10);
 
-        private final String[] NOTES = { "ド", "レ", "ミ", "ファ", "ソ", "ラ", "シ", "ド" };
+  private final String[] NOTES = { "ド", "レ", "ミ", "ファ", "ソ", "ラ", "シ", "ド" };
 
-        private Scene mainScene;
-        private Scene historyScene;
+  private Scene mainScene;
+  private Scene historyScene;
 
-        private Sequencer sequencer;
+  private Sequencer sequencer;
 
-        private boolean canPlayMusic = false;
+  private boolean canPlayMusic = false;
 
-        @Override
-        public void start(Stage stage) {
+  // ★★★ 追加：鍵盤クリックで音を鳴らすための MIDI ★★★
+  private Synthesizer synthesizer;
+  private MidiChannel midiChannel;
 
-                statusLabel = new Label("サーバ接続中...");
-                answerBox = new HBox(5);
-                answerBox.setAlignment(Pos.CENTER);
+  @Override
+  public void start(Stage stage) {
 
-                HBox noteButtons = new HBox(10);
-                noteButtons.setAlignment(Pos.CENTER);
+    // ★★★ MIDI 初期化 ★★★
+    try {
+      synthesizer = MidiSystem.getSynthesizer();
+      synthesizer.open();
+      midiChannel = synthesizer.getChannels()[0]; // ピアノ音色
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
 
-                Pane pianoPane = createPiano();
+    statusLabel = new Label("サーバ接続中...");
+    answerBox = new HBox(5);
+    answerBox.setAlignment(Pos.CENTER);
 
-                for (String note : NOTES) {
-                        Button btn = new Button(note);
-                        btn.setPrefWidth(60);
+    HBox noteButtons = new HBox(10);
+    noteButtons.setAlignment(Pos.CENTER);
 
-                        btn.setOnAction(e -> {
-                                if (answerNotes.size() < noteLabels.size()) {
-                                        answerNotes.add(note);
-                                        noteLabels.get(answerNotes.size() - 1).setText(note);
-                                }
-                        });
+    Pane pianoPane = createPiano();
 
-                        noteButtons.getChildren().add(btn);
-                }
+    for (String note : NOTES) {
+      Button btn = new Button(note);
+      btn.setPrefWidth(60);
 
-                Button deleteBtn = new Button("一音消す");
-                deleteBtn.setPrefWidth(120);
+      btn.setOnAction(e -> {
+        if (answerNotes.size() < noteLabels.size()) {
+          answerNotes.add(note);
+          noteLabels.get(answerNotes.size() - 1).setText(note);
+        }
+      });
 
-                deleteBtn.setOnAction(e -> {
-                        if (!answerNotes.isEmpty()) {
-                                answerNotes.remove(answerNotes.size() - 1);
+      noteButtons.getChildren().add(btn);
+    }
 
-                                for (int i = 0; i < noteLabels.size(); i++) {
-                                        if (i < answerNotes.size()) {
-                                                noteLabels.get(i).setText(answerNotes.get(i));
-                                        } else {
-                                                noteLabels.get(i).setText("");
-                                        }
-                                }
-                        }
-                });
+    Button deleteBtn = new Button("一音消す");
+    deleteBtn.setPrefWidth(120);
 
-                Button sendBtn = new Button("送信");
-                sendBtn.setPrefWidth(120);
-                sendBtn.setOnAction(e -> sendAnswer());
+    deleteBtn.setOnAction(e -> {
+      if (!answerNotes.isEmpty()) {
+        answerNotes.remove(answerNotes.size() - 1);
 
-                Button historyBtn = new Button("履歴を見る");
-                historyBtn.setPrefWidth(120);
-                historyBtn.setOnAction(e -> stage.setScene(historyScene));
+        for (int i = 0; i < noteLabels.size(); i++) {
+          if (i < answerNotes.size()) {
+            noteLabels.get(i).setText(answerNotes.get(i));
+          } else {
+            noteLabels.get(i).setText("");
+          }
+        }
+      }
+    });
 
-                Button playBtn = new Button("曲を聴く(1回のみ)");
-                playBtn.setPrefWidth(120);
-                playBtn.setOnAction(e -> playMidi());
+    Button sendBtn = new Button("送信");
+    sendBtn.setPrefWidth(120);
+    sendBtn.setOnAction(e -> sendAnswer());
 
-                VBox mainRoot = new VBox(20, statusLabel, answerBox, pianoPane, deleteBtn, sendBtn, playBtn,
-                                historyBtn);
-                mainRoot.setPadding(new Insets(20));
-                mainRoot.setAlignment(Pos.CENTER);
+    Button historyBtn = new Button("履歴を見る");
+    historyBtn.setPrefWidth(120);
+    historyBtn.setOnAction(e -> stage.setScene(historyScene));
 
-                mainScene = new Scene(mainRoot, 450, 550);
+    Button playBtn = new Button("曲を聴く(1回のみ)");
+    playBtn.setPrefWidth(120);
+    playBtn.setOnAction(e -> playMidi());
 
-                Label historyTitle = new Label("判定履歴");
-                historyTitle.setStyle("-fx-font-size:18; -fx-font-weight:bold;");
+    VBox mainRoot = new VBox(20, statusLabel, answerBox, pianoPane, deleteBtn, sendBtn, playBtn,
+        historyBtn);
+    mainRoot.setPadding(new Insets(20));
+    mainRoot.setAlignment(Pos.CENTER);
 
-                Button backBtn = new Button("戻る");
-                backBtn.setPrefWidth(120);
-                backBtn.setOnAction(e -> stage.setScene(mainScene));
+    mainScene = new Scene(mainRoot, 450, 550);
 
-                VBox historyRoot = new VBox(20, historyTitle, historyPageBox, backBtn);
-                historyRoot.setPadding(new Insets(20));
-                historyRoot.setAlignment(Pos.CENTER);
+    Label historyTitle = new Label("判定履歴");
+    historyTitle.setStyle("-fx-font-size:18; -fx-font-weight:bold;");
 
-                historyScene = new Scene(historyRoot, 450, 550);
+    Button backBtn = new Button("戻る");
+    backBtn.setPrefWidth(120);
+    backBtn.setOnAction(e -> stage.setScene(mainScene));
 
-                stage.setScene(mainScene);
-                stage.setTitle("音階あてゲーム クライアント");
-                stage.show();
+    VBox historyRoot = new VBox(20, historyTitle, historyPageBox, backBtn);
+    historyRoot.setPadding(new Insets(20));
+    historyRoot.setAlignment(Pos.CENTER);
 
-                new Thread(this::connectToServer).start();
+    historyScene = new Scene(historyRoot, 450, 550);
+
+    stage.setScene(mainScene);
+    stage.setTitle("音階あてゲーム クライアント");
+    stage.show();
+
+    new Thread(this::connectToServer).start();
+  }
+
+  private void playMidi() {
+
+    if (!canPlayMusic) {
+      statusLabel.setText("自分のターンに1度のみ再生可能");
+      return;
+    }
+
+    try {
+      if (sequencer == null) {
+        sequencer = MidiSystem.getSequencer();
+        sequencer.open();
+      }
+
+      if (sequencer.isRunning()) {
+        sequencer.stop();
+      }
+
+      File midiFile = new File("kirakira1.mid");
+      Sequence seq = MidiSystem.getSequence(midiFile);
+
+      sequencer.setSequence(seq);
+      sequencer.start();
+
+      canPlayMusic = false;
+
+    } catch (Exception e) {
+      e.printStackTrace();
+      Platform.runLater(() -> statusLabel.setText("MIDI再生エラー"));
+    }
+  }
+
+  private void connectToServer() {
+    try {
+      socket = new Socket("localhost", 5000);
+      in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
+      out = new PrintWriter(socket.getOutputStream(), true);
+
+      Platform.runLater(() -> statusLabel.setText("サーバに接続しました。"));
+
+      while (true) {
+        String line = in.readLine();
+        if (line == null)
+          break;
+        System.out.println("[受信] " + line);
+        handleServerMessage(line);
+      }
+
+    } catch (IOException e) {
+      Platform.runLater(() -> statusLabel.setText("サーバ接続エラー"));
+    }
+  }
+
+  private void handleServerMessage(String line) {
+
+    String[] parts = line.split("\\s+");
+    String cmd = parts[0];
+
+    switch (cmd) {
+
+      case "ROLE":
+        myRole = Integer.parseInt(parts[1]);
+        Platform.runLater(() -> statusLabel.setText("あなたは Player" + myRole));
+        break;
+
+      case "START":
+        Platform.runLater(() -> statusLabel.setText("ゲーム開始"));
+        break;
+
+      case "MEASURE":
+        int idx = Integer.parseInt(parts[1]) + 1;
+
+        Platform.runLater(() -> {
+          statusLabel.setText("あなたのターン：" + idx + "段階");
+
+          canPlayMusic = true;
+
+          answerBox.getChildren().clear();
+          noteLabels.clear();
+          answerNotes.clear();
+
+          for (int i = 2; i < parts.length; i++) {
+
+            Label label = new Label("");
+            label.setPrefSize(50, 50);
+            label.setAlignment(Pos.CENTER);
+            label.setStyle("-fx-border-color:black; -fx-background-color:white;");
+
+            noteLabels.add(label);
+            answerBox.getChildren().add(label);
+          }
+        });
+
+        break;
+
+      case "WAIT":
+        Platform.runLater(() -> {
+          statusLabel.setText("相手のターンです");
+          canPlayMusic = false;
+        });
+        break;
+
+      case "RESULT":
+
+        Platform.runLater(() -> {
+
+          List<String> judgeList = new ArrayList<>();
+
+          for (int i = 1; i < parts.length; i++) {
+            Label label = noteLabels.get(i - 1);
+            judgeList.add(parts[i]);
+
+            switch (parts[i]) {
+              case "G":
+                label.setStyle(
+                    "-fx-background-color:#6aaa64; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
+                break;
+              case "Y":
+                label.setStyle(
+                    "-fx-background-color:#c9b458; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
+                break;
+              default:
+                label.setStyle(
+                    "-fx-background-color:#787c7e; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
+            }
+          }
+
+          historyNotes.add(new ArrayList<>(answerNotes));
+          historyJudge.add(judgeList);
+
+          HBox row = new HBox(10);
+          row.setAlignment(Pos.CENTER);
+
+          for (int i = 0; i < answerNotes.size(); i++) {
+
+            String note = answerNotes.get(i);
+            String judge = judgeList.get(i);
+
+            Label tile = new Label(note);
+            tile.setPrefSize(50, 50);
+            tile.setAlignment(Pos.CENTER);
+
+            switch (judge) {
+              case "G":
+                tile.setStyle("-fx-background-color:#6aaa64; -fx-text-fill:white; -fx-border-color:black;");
+                break;
+              case "Y":
+                tile.setStyle("-fx-background-color:#c9b458; -fx-text-fill:white; -fx-border-color:black;");
+                break;
+              default:
+                tile.setStyle("-fx-background-color:#787c7e; -fx-text-fill:white; -fx-border-color:black;");
+            }
+
+            row.getChildren().add(tile);
+          }
+
+          historyPageBox.getChildren().add(row);
+
+        });
+
+        break;
+
+      case "NEXT":
+
+        Platform.runLater(() -> {
+
+          historyPageBox.getChildren().clear();
+
+          answerBox.getChildren().clear();
+
+          noteLabels.clear();
+
+          answerNotes.clear();
+
+          statusLabel.setText(
+              "次の段階へ進みます");
+
+        });
+
+        break;
+
+      case "WINNER":
+        int winner = Integer.parseInt(parts[1]);
+        Platform.runLater(() -> {
+          if (winner == myRole) {
+            statusLabel.setText("🎉 あなたの勝ち！");
+          } else {
+            statusLabel.setText("😢 あなたの負け…");
+          }
+        });
+        break;
+
+      default:
+        Platform.runLater(() -> statusLabel.setText("未知のメッセージ:" + line));
+    }
+  }
+
+  private void sendAnswer() {
+    if (out == null)
+      return;
+    if (answerNotes.isEmpty())
+      return;
+
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < answerNotes.size(); i++) {
+      if (i != 0)
+        sb.append(" ");
+      sb.append(answerNotes.get(i));
+    }
+
+    out.println("ANSWER " + sb.toString());
+    System.out.println("[送信] ANSWER " + sb.toString());
+  }
+
+  // ★★★ 音階 → MIDI ノート番号変換 ★★★
+  private int noteToMidi(String note) {
+    switch (note) {
+      case "ド":
+        return 60; // C4
+      case "レ":
+        return 62;
+      case "ミ":
+        return 64;
+      case "ファ":
+        return 65;
+      case "ソ":
+        return 67;
+      case "ラ":
+        return 69;
+      case "シ":
+        return 71;
+      default:
+        return 72; // 高いド
+    }
+  }
+
+  private Pane createPiano() {
+
+    Pane pane = new Pane();
+
+    double keyWidth = 50;
+    double keyHeight = 150;
+
+    String[] whiteNotes = {
+        "ド", "レ", "ミ", "ファ", "ソ", "ラ", "シ", "ド"
+    };
+
+    // 白鍵
+    for (int i = 0; i < whiteNotes.length; i++) {
+
+      Rectangle whiteKey = new Rectangle(keyWidth, keyHeight);
+      whiteKey.setFill(Color.WHITE);
+      whiteKey.setStroke(Color.BLACK);
+      whiteKey.setX(i * keyWidth);
+
+      final String note = whiteNotes[i];
+
+      whiteKey.setOnMousePressed(e -> {
+        whiteKey.setFill(Color.LIGHTGRAY);
+      });
+
+      whiteKey.setOnMouseReleased(e -> {
+        whiteKey.setFill(Color.WHITE);
+      });
+
+      whiteKey.setOnMouseClicked(e -> {
+
+        if (answerNotes.size() < noteLabels.size()) {
+          answerNotes.add(note);
+          noteLabels.get(answerNotes.size() - 1).setText(note);
         }
 
-        private void playMidi() {
-
-                if (!canPlayMusic) {
-                        statusLabel.setText("自分のターンに1度のみ再生可能");
-                        return;
-                }
-
-                try {
-                        if (sequencer == null) {
-                                sequencer = MidiSystem.getSequencer();
-                                sequencer.open();
-                        }
-
-                        if (sequencer.isRunning()) {
-                                sequencer.stop();
-                        }
-
-                        File midiFile = new File("kirakira1.mid");
-                        Sequence seq = MidiSystem.getSequence(midiFile);
-
-                        sequencer.setSequence(seq);
-                        sequencer.start();
-
-                        canPlayMusic = false;
-
-                } catch (Exception e) {
-                        e.printStackTrace();
-                        Platform.runLater(() -> statusLabel.setText("MIDI再生エラー"));
-                }
+        // ★★★ クリックで音を鳴らす ★★★
+        if (midiChannel != null) {
+          int midiNote = noteToMidi(note);
+          midiChannel.noteOn(midiNote, 80);
+          new Thread(() -> {
+            try {
+              Thread.sleep(300);
+            } catch (InterruptedException ex) {
+            }
+            midiChannel.noteOff(midiNote);
+          }).start();
         }
 
-        private void connectToServer() {
-                try {
-                        socket = new Socket("localhost", 5000);
-                        in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
-                        out = new PrintWriter(socket.getOutputStream(), true);
+      });
 
-                        Platform.runLater(() -> statusLabel.setText("サーバに接続しました。"));
+      pane.getChildren().add(whiteKey);
 
-                        while (true) {
-                                String line = in.readLine();
-                                if (line == null)
-                                        break;
-                                System.out.println("[受信] " + line);
-                                handleServerMessage(line);
-                        }
-
-                } catch (IOException e) {
-                        Platform.runLater(() -> statusLabel.setText("サーバ接続エラー"));
-                }
-        }
-
-        private void handleServerMessage(String line) {
-
-                String[] parts = line.split("\\s+");
-                String cmd = parts[0];
-
-                switch (cmd) {
+      Label label = new Label(note);
+      label.setLayoutX(i * keyWidth + 22);
+      label.setLayoutY(150);
 
-                        case "ROLE":
-                                myRole = Integer.parseInt(parts[1]);
-                                Platform.runLater(() -> statusLabel.setText("あなたは Player" + myRole));
-                                break;
+      pane.getChildren().add(label);
+    }
 
-                        case "START":
-                                Platform.runLater(() -> statusLabel.setText("ゲーム開始"));
-                                break;
+    int[] blackPos = { 0, 1, 3, 4, 5, 7 };
 
-                        case "MEASURE":
-                                int idx = Integer.parseInt(parts[1]) + 1;
+    for (int pos : blackPos) {
 
-                                Platform.runLater(() -> {
-                                        statusLabel.setText("あなたのターン：" + idx + "段階");
+      double width = keyWidth * 0.5;
 
-                                        canPlayMusic = true;
+      if (pos == 7) {
+        width = keyWidth * 0.3;
+      }
 
-                                        answerBox.getChildren().clear();
-                                        noteLabels.clear();
-                                        answerNotes.clear();
+      Rectangle blackKey = new Rectangle(
+          width,
+          keyHeight * 0.6);
 
-                                        for (int i = 2; i < parts.length; i++) {
+      blackKey.setFill(Color.BLACK);
+      blackKey.setStroke(Color.BLACK);
 
-                                                Label label = new Label("");
-                                                label.setPrefSize(50, 50);
-                                                label.setAlignment(Pos.CENTER);
-                                                label.setStyle("-fx-border-color:black; -fx-background-color:white;");
+      blackKey.setX((pos + 1) * keyWidth - width / 2);
+      blackKey.setY(0);
 
-                                                noteLabels.add(label);
-                                                answerBox.getChildren().add(label);
-                                        }
-                                });
+      if (pos == 7) {
+        blackKey.setX((pos + 0.85) * keyWidth - width / 2);
+      }
 
-                                break;
+      blackKey.setOnMouseClicked(e -> {
+        // 黒鍵は何もしない
+      });
 
-                        case "WAIT":
-                                Platform.runLater(() -> {
-                                        statusLabel.setText("相手のターンです");
-                                        canPlayMusic = false;
-                                });
-                                break;
+      pane.getChildren().add(blackKey);
+    }
 
-                        case "RESULT":
+    pane.setPrefSize(480, 180);
 
-                                Platform.runLater(() -> {
+    return pane;
+  }
 
-                                        List<String> judgeList = new ArrayList<>();
-
-                                        for (int i = 1; i < parts.length; i++) {
-                                                Label label = noteLabels.get(i - 1);
-                                                judgeList.add(parts[i]);
-
-                                                switch (parts[i]) {
-                                                        case "G":
-                                                                label.setStyle("-fx-background-color:#6aaa64; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
-                                                                break;
-                                                        case "Y":
-                                                                label.setStyle("-fx-background-color:#c9b458; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
-                                                                break;
-                                                        default:
-                                                                label.setStyle("-fx-background-color:#787c7e; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
-                                                }
-                                        }
-
-                                        historyNotes.add(new ArrayList<>(answerNotes));
-                                        historyJudge.add(judgeList);
-
-                                        // ★★★ 履歴ページに追加（音階タイルの背景色で判定を表す） ★★★
-                                        HBox row = new HBox(10);
-                                        row.setAlignment(Pos.CENTER);
-
-                                        for (int i = 0; i < answerNotes.size(); i++) {
-
-                                                String note = answerNotes.get(i);
-                                                String judge = judgeList.get(i);
-
-                                                Label tile = new Label(note);
-                                                tile.setPrefSize(50, 50);
-                                                tile.setAlignment(Pos.CENTER);
-
-                                                switch (judge) {
-                                                        case "G":
-                                                                tile.setStyle("-fx-background-color:#6aaa64; -fx-text-fill:white; -fx-border-color:black;");
-                                                                break;
-                                                        case "Y":
-                                                                tile.setStyle("-fx-background-color:#c9b458; -fx-text-fill:white; -fx-border-color:black;");
-                                                                break;
-                                                        default:
-                                                                tile.setStyle("-fx-background-color:#787c7e; -fx-text-fill:white; -fx-border-color:black;");
-                                                }
-
-                                                row.getChildren().add(tile);
-                                        }
-
-                                        historyPageBox.getChildren().add(row);
-
-                                });
-
-                                break;
-
-                        case "NEXT":
-
-                                Platform.runLater(() -> {
-
-                                        // 現在段階の履歴を削除
-                                        historyPageBox.getChildren().clear();
-
-                                        // 入力欄も初期化
-                                        answerBox.getChildren().clear();
-
-                                        noteLabels.clear();
-
-                                        answerNotes.clear();
-
-                                        statusLabel.setText(
-                                                        "次の段階へ進みます");
-
-                                });
-
-                                break;
-
-                        case "WINNER":
-                                int winner = Integer.parseInt(parts[1]);
-                                Platform.runLater(() -> {
-                                        if (winner == myRole) {
-                                                statusLabel.setText("🎉 あなたの勝ち！");
-                                        } else {
-                                                statusLabel.setText("😢 あなたの負け…");
-                                        }
-                                });
-                                break;
-
-                        default:
-                                Platform.runLater(() -> statusLabel.setText("未知のメッセージ:" + line));
-                }
-        }
-
-        private void sendAnswer() {
-                if (out == null)
-                        return;
-                if (answerNotes.isEmpty())
-                        return;
-
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < answerNotes.size(); i++) {
-                        if (i != 0)
-                                sb.append(" ");
-                        sb.append(answerNotes.get(i));
-                }
-
-                out.println("ANSWER " + sb.toString());
-                System.out.println("[送信] ANSWER " + sb.toString());
-        }
-
-        private Pane createPiano() {
-
-                Pane pane = new Pane();
-
-                double keyWidth = 50;
-                double keyHeight = 150;
-
-                String[] whiteNotes = {
-                                "ド", "レ", "ミ", "ファ", "ソ", "ラ", "シ", "ド"
-                };
-
-                // 白鍵
-                for (int i = 0; i < whiteNotes.length; i++) {
-
-                        Rectangle whiteKey = new Rectangle(keyWidth, keyHeight);
-                        whiteKey.setFill(Color.WHITE);
-                        whiteKey.setStroke(Color.BLACK);
-                        whiteKey.setX(i * keyWidth);
-
-                        final String note = whiteNotes[i];
-
-                        whiteKey.setOnMousePressed(e -> {
-                                whiteKey.setFill(Color.LIGHTGRAY);
-                        });
-
-                        whiteKey.setOnMouseReleased(e -> {
-                                whiteKey.setFill(Color.WHITE);
-                        });
-
-                        whiteKey.setOnMouseClicked(e -> {
-
-                                if (answerNotes.size() < noteLabels.size()) {
-                                        answerNotes.add(note);
-                                        noteLabels.get(answerNotes.size() - 1).setText(note);
-                                }
-
-                        });
-
-                        pane.getChildren().add(whiteKey);
-
-                        // 鍵盤名
-                        Label label = new Label(note);
-                        label.setLayoutX(i * keyWidth + 22);
-                        label.setLayoutY(150);
-
-                        pane.getChildren().add(label);
-                }
-
-                // 黒鍵の位置（ミ・シの後は黒鍵なし）
-                int[] blackPos = { 0, 1, 3, 4, 5, 7 };
-
-                for (int pos : blackPos) {
-
-                        double width = keyWidth * 0.5;
-
-                        // 一番右(7)だけ幅を半分にする
-                        if (pos == 7) {
-                                width = keyWidth * 0.3;
-                        }
-
-                        Rectangle blackKey = new Rectangle(
-                                        width,
-                                        keyHeight * 0.6);
-
-                        blackKey.setFill(Color.BLACK);
-                        blackKey.setStroke(Color.BLACK);
-
-                        blackKey.setX((pos + 1) * keyWidth - width / 2);
-                        blackKey.setY(0);
-
-                        if (pos == 7) {
-                                blackKey.setX((pos + 0.85) * keyWidth - width / 2);;
-                        }
-
-                        // 押しても何もしない
-                        blackKey.setOnMouseClicked(e -> {
-                        });
-
-                        pane.getChildren().add(blackKey);
-                }
-
-                pane.setPrefSize(480, 180);
-
-                return pane;
-        }
-
-        public static void main(String[] args) {
-                launch(args);
-        }
+  public static void main(String[] args) {
+    launch(args);
+  }
 }
