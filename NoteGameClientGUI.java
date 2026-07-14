@@ -50,12 +50,9 @@ public class NoteGameClientGUI extends Application {
 
   private boolean canPlayMusic = false;
 
-  // ★ 鍵盤クリック用 MIDI
+  // 鍵盤クリック用 MIDI
   private Synthesizer synthesizer;
   private MidiChannel midiChannel;
-
-  // ★ 再生する MIDI ファイル名（段階ごとに変更）
-  private String currentMidi = "kirakira1.mid";
 
   @Override
   public void start(Stage stage) {
@@ -162,8 +159,9 @@ public class NoteGameClientGUI extends Application {
         sequencer.stop();
       }
 
-      // ★ 段階ごとに currentMidi が変わる
-      Sequence seq = MidiSystem.getSequence(new File(currentMidi));
+      // ★★★ サーバから受信した MIDI を再生する ★★★
+      File midiFile = new File("received.mid");
+      Sequence seq = MidiSystem.getSequence(midiFile);
 
       sequencer.setSequence(seq);
       sequencer.start();
@@ -242,13 +240,6 @@ public class NoteGameClientGUI extends Application {
 
           canPlayMusic = true;
 
-          // ★★★ 段階ごとに MIDI を切り替える ★★★
-          if (idx == 1) {
-            currentMidi = "kirakira1.mid";
-          } else if (idx == 2) {
-            currentMidi = "kirakira2.mid";
-          }
-
           answerBox.getChildren().clear();
           noteLabels.clear();
           answerNotes.clear();
@@ -282,16 +273,13 @@ public class NoteGameClientGUI extends Application {
 
             switch (parts[i]) {
               case "G":
-                label.setStyle(
-                    "-fx-background-color:#6aaa64; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
+                label.setStyle("-fx-background-color:#6aaa64; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
                 break;
               case "Y":
-                label.setStyle(
-                    "-fx-background-color:#c9b458; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
+                label.setStyle("-fx-background-color:#c9b458; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
                 break;
               default:
-                label.setStyle(
-                    "-fx-background-color:#787c7e; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
+                label.setStyle("-fx-background-color:#787c7e; -fx-text-fill:white; -fx-font-size:18; -fx-border-color:black;");
             }
           }
 
@@ -358,15 +346,12 @@ public class NoteGameClientGUI extends Application {
   }
 
   private void sendAnswer() {
-    if (out == null)
-      return;
-    if (answerNotes.isEmpty())
-      return;
+    if (out == null) return;
+    if (answerNotes.isEmpty()) return;
 
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < answerNotes.size(); i++) {
-      if (i != 0)
-        sb.append(" ");
+      if (i != 0) sb.append(" ");
       sb.append(answerNotes.get(i));
     }
 
@@ -380,22 +365,14 @@ public class NoteGameClientGUI extends Application {
 
   private int noteToMidi(String note) {
     switch (note) {
-      case "ド":
-        return 60;
-      case "レ":
-        return 62;
-      case "ミ":
-        return 64;
-      case "ファ":
-        return 65;
-      case "ソ":
-        return 67;
-      case "ラ":
-        return 69;
-      case "シ":
-        return 71;
-      default:
-        return 72;
+      case "ド": return 60;
+      case "レ": return 62;
+      case "ミ": return 64;
+      case "ファ": return 65;
+      case "ソ": return 67;
+      case "ラ": return 69;
+      case "シ": return 71;
+      default: return 72;
     }
   }
 
@@ -431,10 +408,7 @@ public class NoteGameClientGUI extends Application {
           int midiNote = noteToMidi(note);
           midiChannel.noteOn(midiNote, 80);
           new Thread(() -> {
-            try {
-              Thread.sleep(300);
-            } catch (InterruptedException ex) {
-            }
+            try { Thread.sleep(300); } catch (InterruptedException ex) {}
             midiChannel.noteOff(midiNote);
           }).start();
         }
@@ -454,8 +428,7 @@ public class NoteGameClientGUI extends Application {
     for (int pos : blackPos) {
 
       double width = keyWidth * 0.5;
-      if (pos == 7)
-        width = keyWidth * 0.3;
+      if (pos == 7) width = keyWidth * 0.3;
 
       Rectangle blackKey = new Rectangle(width, keyHeight * 0.6);
       blackKey.setFill(Color.BLACK);
@@ -464,11 +437,9 @@ public class NoteGameClientGUI extends Application {
       blackKey.setX((pos + 1) * keyWidth - width / 2);
       blackKey.setY(0);
 
-      if (pos == 7)
-        blackKey.setX((pos + 0.85) * keyWidth - width / 2);
+      if (pos == 7) blackKey.setX((pos + 0.85) * keyWidth - width / 2);
 
-      blackKey.setOnMouseClicked(e -> {
-      });
+      blackKey.setOnMouseClicked(e -> {});
 
       pane.getChildren().add(blackKey);
     }
