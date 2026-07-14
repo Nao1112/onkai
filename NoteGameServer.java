@@ -10,429 +10,248 @@ import java.util.Random;
 
 public class NoteGameServer {
 
-        // ゲームで使用する正解曲データ
-        // 1つのString配列が1問分の音階を表す
-        // 例：「ド ド ソ ソ ラ ラ ソ」
-        private static final List<String[]> SONG = List.of(
-                        new String[] { "ド", "ド", "ソ", "ソ", "ラ", "ラ", "ソ" },
-                        new String[] { "ファ", "ファ", "ミ", "ミ", "レ", "レ", "ド" });
+  private static final List<String[]> SONG = List.of(
+      new String[] { "ド", "ド", "ソ", "ソ", "ラ", "ラ", "ソ" },
+      new String[] { "ファ", "ファ", "ミ", "ミ", "レ", "レ", "ド" });
 
-        public static void main(String[] args) {
+  public static void main(String[] args) {
 
-                // サーバが待ち受けるポート番号
-                int port = 5000;
+    int port = 5000;
 
-                // ServerSocketを作成し、クライアントからの接続を待つ
-                try (ServerSocket serverSocket = new ServerSocket(port)) {
+    try (ServerSocket serverSocket = new ServerSocket(port)) {
 
-                        System.out.println("音階あてゲームサーバ起動: port=" + port);
-                        System.out.println("プレイヤー接続待ち...");
+      System.out.println("音階あてゲームサーバ起動: port=" + port);
+      System.out.println("プレイヤー接続待ち...");
 
-                        // 1人目のプレイヤーの接続を待つ
-                        Socket p1Socket = serverSocket.accept();
-                        System.out.println("プレイヤー1接続: "
-                                        + p1Socket.getInetAddress());
+      Socket p1Socket = serverSocket.accept();
+      System.out.println("プレイヤー1接続: " + p1Socket.getInetAddress());
 
-                        // 2人目のプレイヤーの接続を待つ
-                        Socket p2Socket = serverSocket.accept();
-                        System.out.println("プレイヤー2接続: "
-                                        + p2Socket.getInetAddress());
+      Socket p2Socket = serverSocket.accept();
+      System.out.println("プレイヤー2接続: " + p2Socket.getInetAddress());
 
-                        // Socketを通信管理用クラスに変換
-                        PlayerConnection player1 = new PlayerConnection(p1Socket);
+      PlayerConnection player1 = new PlayerConnection(p1Socket);
+      PlayerConnection player2 = new PlayerConnection(p2Socket);
 
-                        PlayerConnection player2 = new PlayerConnection(p2Socket);
+      int firstPlayer = new Random().nextBoolean() ? 1 : 2;
+      int currentPlayer = firstPlayer;
 
-                        // 先攻プレイヤーをランダムで決定
-                        // trueなら1、falseなら2
-                        int firstPlayer = new Random().nextBoolean() ? 1 : 2;
+      player1.sendLine("ROLE 1");
+      player2.sendLine("ROLE 2");
 
-                        // 現在回答するプレイヤー
-                        int currentPlayer = firstPlayer;
+      player1.sendLine("START");
+      player2.sendLine("START");
 
-                        // プレイヤー番号を通知
-                        player1.sendLine("ROLE 1");
-                        player2.sendLine("ROLE 2");
+      // ★ 最初の段階の MIDI を送信
+      player1.sendMidi("kirakira1.mid");
+      player2.sendMidi("kirakira1.mid");
 
-                        // ゲーム開始を通知
-                        player1.sendLine("START");
-                        player2.sendLine("START");
+      System.out.println("先攻プレイヤー: " + firstPlayer);
 
-                        // midiファイルを送る
-                        player1.sendMidi("kirakira1.mid");
-                        player2.sendMidi("kirakira1.mid");
+      int[] measureIndex = { 0, 0 };
 
-                        System.out.println("先攻プレイヤー: "
-                                        + firstPlayer);
+      boolean finished = false;
+      int winner = 0;
 
-                        // 各プレイヤーが現在何問目まで正解したか管理
-                        // [0] = Player1
-                        // [1] = Player2
-                        int[] measureIndex = { 0, 0 };
+      while (!finished) {
 
-                        // ゲーム終了判定
-                        boolean finished = false;
+        PlayerConnection active = (currentPlayer == 1) ? player1 : player2;
+        PlayerConnection waiting = (currentPlayer == 1) ? player2 : player1;
 
-                        // 勝者番号
-                        int winner = 0;
+        String[] measureNotes = SONG.get(measureIndex[currentPlayer - 1]);
 
-                        // 勝者が決まるまでゲームを繰り返す
-                        while (!finished) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("MEASURE ").append(measureIndex[currentPlayer - 1]);
 
-                                // 現在回答するプレイヤー
-                                PlayerConnection active = (currentPlayer == 1)
-                                                ? player1
-                                                : player2;
-
-                                // 待機中のプレイヤー
-                                PlayerConnection waiting = (currentPlayer == 1)
-                                                ? player2
-                                                : player1;
-
-                                // 現在の問題を取得
-                                String[] measureNotes = SONG.get(
-                                                measureIndex[currentPlayer - 1]);
-
-                                // クライアントへ送信する問題文を作成
-                                // 例:
-                                // MEASURE 0 ド ド ソ ソ ラ ラ ソ
-                                StringBuilder sb = new StringBuilder();
-
-                                sb.append("MEASURE ")
-                                                .append(measureIndex[currentPlayer - 1]);
-
-                                for (String note : measureNotes) {
-                                        sb.append(" ")
-                                                        .append(note);
-                                }
-
-                                // 回答するプレイヤーへ問題送信
-                                active.sendLine(sb.toString());
-
-                                // 相手には待機通知
-                                waiting.sendLine("WAIT");
-
-                                System.out.println(
-                                                "送信: "
-                                                                + sb
-                                                                + " -> Player"
-                                                                + currentPlayer);
-
-                                // プレイヤーから回答を受信
-                                // 例:
-                                // ANSWER ド ド ソ ソ ラ ラ ソ
-                                String answerLine = active.readLine();
-
-                                // 切断された場合
-                                if (answerLine == null) {
-
-                                        System.out.println(
-                                                        "Player"
-                                                                        + currentPlayer
-                                                                        + " 切断。ゲーム終了。");
-
-                                        break;
-                                }
-
-                                System.out.println(
-                                                "受信: "
-                                                                + answerLine);
-
-                                // ANSWER以外のデータの場合は無効回答
-                                if (!answerLine.startsWith("ANSWER")) {
-
-                                        active.sendLine(
-                                                        "RESULT 0 0");
-
-                                        // ターン交代
-                                        currentPlayer = (currentPlayer == 1)
-                                                        ? 2
-                                                        : 1;
-
-                                        continue;
-                                }
-
-                                // 受信した回答を空白で分割
-                                String[] parts = answerLine.split("\\s+");
-
-                                // ANSWER以降の音階だけを保存
-                                String[] answerNotes = new String[parts.length - 1];
-
-                                System.arraycopy(
-                                                parts,
-                                                1,
-                                                answerNotes,
-                                                0,
-                                                answerNotes.length);
-
-                                // 完全一致しているか確認
-                                boolean correct = isCorrect(
-                                                measureNotes,
-                                                answerNotes);
-
-                                // 位置が一致している音の数を取得
-                                int matchCount = countMatches(
-                                                measureNotes,
-                                                answerNotes);
-
-                                // Wordle形式で色判定
-                                // G = 正しい位置
-                                // Y = 位置違い
-                                // B = 不正解
-                                String[] colors = judgeWordle(
-                                                answerNotes,
-                                                measureNotes);
-
-                                // RESULTメッセージ作成
-                                // 例:
-                                // RESULT G Y B G
-                                sb.setLength(0);
-
-                                sb.append("RESULT");
-
-                                for (String c : colors) {
-                                        sb.append(" ")
-                                                        .append(c);
-                                }
-
-                                // 判定結果を送信
-                                active.sendLine(
-                                                sb.toString());
-
-                                System.out.println(
-                                                "判定: correct="
-                                                                + correct
-                                                                + ", match="
-                                                                + matchCount);
-
-                                // 完全正解の場合
-                                if (correct) {
-
-                                        // 次の問題へ進む
-                                        measureIndex[currentPlayer - 1]++;
-
-                                        // 全問題クリアした場合
-                                        if (measureIndex[currentPlayer - 1] >= SONG.size()) {
-
-                                                finished = true;
-
-                                                winner = currentPlayer;
-                                        } else {
-
-                                                // 次の段階へ進むことを通知
-                                                active.sendLine("NEXT");
-
-                                        }
-                                }
-
-                                // ターン交代
-                                currentPlayer = (currentPlayer == 1)
-                                                ? 2
-                                                : 1;
-                        }
-
-                        // 勝者がいる場合
-                        if (winner != 0) {
-
-                                System.out.println(
-                                                "勝者: Player"
-                                                                + winner);
-
-                                // 両方に勝者通知
-                                player1.sendLine(
-                                                "WINNER " + winner);
-
-                                player2.sendLine(
-                                                "WINNER " + winner);
-                        }
-
-                        player1.sendLine("GAMEEND");
-                        player2.sendLine("GAMEEND");
-                        // 通信終了
-                        player1.close();
-                        player2.close();
-
-                        System.out.println(
-                                        "ゲーム終了。サーバ停止。");
-
-                } catch (IOException e) {
-
-                        // 通信エラー表示
-                        e.printStackTrace();
-                }
+        for (String note : measureNotes) {
+          sb.append(" ").append(note);
         }
 
-        // 音階が完全一致しているか判定する
-        private static boolean isCorrect(
-                        String[] measure,
-                        String[] answer) {
+        active.sendLine(sb.toString());
+        waiting.sendLine("WAIT");
 
-                // 音数が違う場合は不正解
-                if (measure.length != answer.length)
-                        return false;
+        System.out.println("送信: " + sb + " -> Player" + currentPlayer);
 
-                // 1音ずつ比較
-                for (int i = 0; i < measure.length; i++) {
+        String answerLine = active.readLine();
 
-                        if (!measure[i].equals(answer[i]))
-                                return false;
-                }
-
-                return true;
+        if (answerLine == null) {
+          System.out.println("Player" + currentPlayer + " 切断。ゲーム終了。");
+          break;
         }
 
-        // 同じ位置の音が何個あるか数える
-        private static int countMatches(
-                        String[] measure,
-                        String[] answer) {
+        System.out.println("受信: " + answerLine);
 
-                int len = Math.min(
-                                measure.length,
-                                answer.length);
-
-                int count = 0;
-
-                for (int i = 0; i < len; i++) {
-
-                        if (measure[i].equals(answer[i]))
-                                count++;
-                }
-
-                return count;
+        if (!answerLine.startsWith("ANSWER")) {
+          active.sendLine("RESULT 0 0");
+          currentPlayer = (currentPlayer == 1) ? 2 : 1;
+          continue;
         }
 
-        // Wordle風の色判定
-        private static String[] judgeWordle(
-                        String[] answer,
-                        String[] correct) {
+        String[] parts = answerLine.split("\\s+");
+        String[] answerNotes = new String[parts.length - 1];
+        System.arraycopy(parts, 1, answerNotes, 0, answerNotes.length);
 
-                String[] result = new String[answer.length];
+        boolean correct = isCorrect(measureNotes, answerNotes);
+        int matchCount = countMatches(measureNotes, answerNotes);
+        String[] colors = judgeWordle(answerNotes, measureNotes);
 
-                // すでに使用した正解音を記録
-                boolean[] used = new boolean[correct.length];
+        sb.setLength(0);
+        sb.append("RESULT");
+        for (String c : colors)
+          sb.append(" ").append(c);
 
-                // まず完全一致(G)を確認
-                for (int i = 0; i < answer.length; i++) {
+        active.sendLine(sb.toString());
 
-                        if (i < correct.length
-                                        && answer[i].equals(correct[i])) {
+        System.out.println("判定: correct=" + correct + ", match=" + matchCount);
 
-                                result[i] = "G";
+        if (correct) {
 
-                                used[i] = true;
-                        }
-                }
+          measureIndex[currentPlayer - 1]++;
 
-                // 次に黄色(Y)・灰色(B)を確認
-                for (int i = 0; i < answer.length; i++) {
+          if (measureIndex[currentPlayer - 1] >= SONG.size()) {
 
-                        // すでにGならスキップ
-                        if (result[i] != null)
-                                continue;
+            finished = true;
+            winner = currentPlayer;
 
-                        boolean found = false;
+          } else {
 
-                        // 正解音の中に存在するか確認
-                        for (int j = 0; j < correct.length; j++) {
+            // ★★★ 次の段階の MIDI を送信 ★★★
+            if (measureIndex[currentPlayer - 1] == 1) {
+              active.sendMidi("kirakira2.mid");
+            }
 
-                                if (!used[j]
-                                                && answer[i].equals(correct[j])) {
-
-                                        found = true;
-
-                                        used[j] = true;
-
-                                        break;
-                                }
-                        }
-
-                        result[i] = found ? "Y" : "B";
-                }
-
-                return result;
+            active.sendLine("NEXT");
+          }
         }
 
-        // プレイヤーとの通信を管理するクラス
-        private static class PlayerConnection {
+        currentPlayer = (currentPlayer == 1) ? 2 : 1;
+      }
 
-                private final Socket socket;
+      if (winner != 0) {
+        System.out.println("勝者: Player" + winner);
+        player1.sendLine("WINNER " + winner);
+        player2.sendLine("WINNER " + winner);
+      }
 
-                private final DataInputStream in;
-                private final DataOutputStream out;
+      player1.sendLine("GAMEEND");
+      player2.sendLine("GAMEEND");
 
-                // 通信準備
-                PlayerConnection(Socket socket)
-                                throws IOException {
+      player1.close();
+      player2.close();
 
-                        this.socket = socket;
+      System.out.println("ゲーム終了。サーバ停止。");
 
-                        // 受信用
-                        this.in = new DataInputStream(socket.getInputStream());
-                        this.out = new DataOutputStream(socket.getOutputStream());
-                }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
 
-                // メッセージ送信
-                void sendLine(String line) {
+  private static boolean isCorrect(String[] measure, String[] answer) {
+    if (measure.length != answer.length)
+      return false;
+    for (int i = 0; i < measure.length; i++) {
+      if (!measure[i].equals(answer[i]))
+        return false;
+    }
+    return true;
+  }
 
-                        try {
-                                out.writeUTF(line);
-                                out.flush();
-                        } catch (IOException e) {
-                                e.printStackTrace();
-                        }
+  private static int countMatches(String[] measure, String[] answer) {
+    int len = Math.min(measure.length, answer.length);
+    int count = 0;
+    for (int i = 0; i < len; i++) {
+      if (measure[i].equals(answer[i]))
+        count++;
+    }
+    return count;
+  }
 
-                }
+  private static String[] judgeWordle(String[] answer, String[] correct) {
+    String[] result = new String[answer.length];
+    boolean[] used = new boolean[correct.length];
 
-                // メッセージ受信
-                String readLine() throws IOException {
+    for (int i = 0; i < answer.length; i++) {
+      if (i < correct.length && answer[i].equals(correct[i])) {
+        result[i] = "G";
+        used[i] = true;
+      }
+    }
 
-                        return in.readUTF();
+    for (int i = 0; i < answer.length; i++) {
+      if (result[i] != null)
+        continue;
 
-                }
-
-                void sendMidi(String filename) throws IOException {
-
-                        File file = new File(filename);
-
-                        sendLine("MIDI");
-
-                        out.writeLong(file.length());
-
-                        FileInputStream fis = new FileInputStream(file);
-
-                        byte[] buffer = new byte[4096];
-
-                        int len;
-
-                        while ((len = fis.read(buffer)) != -1) {
-
-                                out.write(buffer, 0, len);
-
-                        }
-
-                        out.flush();
-
-                        fis.close();
-
-                }
-
-                // 通信終了処理
-                void close() {
-
-                        try {
-                                in.close();
-                        } catch (IOException ignored) {
-                        }
-
-                        try {
-                                out.close();
-                        } catch (IOException ignored) {
-                        }
-
-                        try {
-                                socket.close();
-                        } catch (IOException ignored) {
-                        }
-                }
+      boolean found = false;
+      for (int j = 0; j < correct.length; j++) {
+        if (!used[j] && answer[i].equals(correct[j])) {
+          found = true;
+          used[j] = true;
+          break;
         }
+      }
+
+      result[i] = found ? "Y" : "B";
+    }
+
+    return result;
+  }
+
+  private static class PlayerConnection {
+
+    private final Socket socket;
+    private final DataInputStream in;
+    private final DataOutputStream out;
+
+    PlayerConnection(Socket socket) throws IOException {
+      this.socket = socket;
+      this.in = new DataInputStream(socket.getInputStream());
+      this.out = new DataOutputStream(socket.getOutputStream());
+    }
+
+    void sendLine(String line) {
+      try {
+        out.writeUTF(line);
+        out.flush();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+    String readLine() throws IOException {
+      return in.readUTF();
+    }
+
+    void sendMidi(String filename) throws IOException {
+
+      File file = new File(filename);
+
+      sendLine("MIDI");
+      out.writeLong(file.length());
+
+      FileInputStream fis = new FileInputStream(file);
+      byte[] buffer = new byte[4096];
+
+      int len;
+      while ((len = fis.read(buffer)) != -1) {
+        out.write(buffer, 0, len);
+      }
+
+      out.flush();
+      fis.close();
+    }
+
+    void close() {
+      try {
+        in.close();
+      } catch (IOException ignored) {
+      }
+      try {
+        out.close();
+      } catch (IOException ignored) {
+      }
+      try {
+        socket.close();
+      } catch (IOException ignored) {
+      }
+    }
+  }
 }
