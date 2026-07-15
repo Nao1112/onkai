@@ -38,8 +38,6 @@ public class NoteGameClientGUI extends Application {
 
         private VBox historyPageBox = new VBox(10);
 
-        private final String[] NOTES = { "ド", "レ", "ミ", "ファ", "ソ", "ラ", "シ", "ド" };
-
         private Scene mainScene;
         private Scene historyScene;
 
@@ -69,19 +67,6 @@ public class NoteGameClientGUI extends Application {
                 answerBox.setAlignment(Pos.CENTER);
 
                 Pane pianoPane = createPiano();
-
-                for (String note : NOTES) {
-                        Button btn = new Button(note);
-                        btn.setPrefWidth(60);
-
-                        btn.setOnAction(e -> {
-                                if (answerNotes.size() < noteLabels.size()) {
-                                        answerNotes.add(note);
-                                        noteLabels.get(answerNotes.size() - 1).setText(note);
-                                }
-                        });
-
-                }
 
                 Button deleteBtn = new Button("一音消す");
                 deleteBtn.setPrefWidth(120);
@@ -149,9 +134,7 @@ public class NoteGameClientGUI extends Application {
                         if (sequencer == null) {
                                 sequencer = MidiSystem.getSequencer();
                                 sequencer.open();
-                        }
-
-                        if (sequencer.isRunning()) {
+                        }else if (sequencer.isRunning()) {
                                 sequencer.stop();
                         }
 
